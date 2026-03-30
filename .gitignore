@@ -1,0 +1,34 @@
+# Environment & local config (never commit credentials or project IDs)
+.env
+.env.local
+# Local overrides — set PROJECT_ID, GCS URIs, etc. here instead of editing Makefiles
+.makerc.local
+
+# Generated gRPC stubs (built in Dockerfile + `make proto`)
+emotion_pb2.py
+emotion_pb2_grpc.py
+
+# TorchServe artifacts
+*.mar
+/opt/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Model weights (too large for git, stored in GCS)
+/model-store/
+weights/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store

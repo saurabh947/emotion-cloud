@@ -1,0 +1,65 @@
+# Local development / integration testing.
+#
+# Usage:
+#   cp .env.example .env          # fill in GCS URI + credentials
+#   docker compose -f deploy/docker/docker-compose.yml up --build
+#
+# The gRPC server is reachable at localhost:50051.
+# TorchServe management API is intentionally NOT published externally.
+#
+# GPU note: requires NVIDIA Container Toolkit on the host.
+# Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+services:
+  emotion-cloud:
+    build:
+      context: ../..          # repo root (so COPY . . works)
+      dockerfile: deploy/docker/Dockerfile
+    image: emotion-cloud:local
+    container_name: emotion-cloud
+
+    # GPU access — requires NVIDIA Container Toolkit.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "50051:50051"         # gRPC — accessible from host / reachy-emotion
+
+    env_file:
+      - ../../.env            # load from repo root .env
+
+    environment:
+      # Override GCS path for local testing if you mount weights directly.
+      # WEIGHTS_GCS_URI: ""
+      # WEIGHTS_LOCAL_PATH: /opt/ml/model-store/weights
+
+      # Use CPU for local dev if no GPU available (override DEVICE in .env).
+      # DEVICE: cpu
+      # USE_INT8: "false"
+      TORCHSERVE_STARTUP_TIMEOUT: "180"
+
+    volumes:
+      # Persist downloaded weights across container restarts (speeds up dev loop).
+      - model-weights:/opt/ml/model-store/weights
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import grpc; import emotion_pb2_grpc; import emotion_pb2; \
+              ch = grpc.insecure_channel('localhost:50051'); \
+              stub = emotion_pb2_grpc.EmotionDetectionStub(ch); \
+              stub.HealthCheck(emotion_pb2.HealthRequest(), timeout=3)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s      # generous start period for model loading
+
+    restart: unless-stopped
+
+volumes:
+  model-weights:
+    driver: local

@@ -1,0 +1,27 @@
+# ── emotion-detection-action SDK ─────────────────────────────────────────────
+# Installed directly from GitHub. Pin to a commit SHA in production.
+emotion-detection-action @ git+https://github.com/saurabh947/emotion-detection-action.git
+
+# ── gRPC / Protobuf ───────────────────────────────────────────────────────────
+grpcio==1.62.1
+grpcio-tools==1.62.1        # protoc compiler (used at build time via `make proto`)
+protobuf==4.25.3
+
+# ── TorchServe ────────────────────────────────────────────────────────────────
+# torchserve and torch-model-archiver are installed in the base Docker image
+# (pytorch/torchserve:latest-gpu).  Listed here for local dev / awareness.
+torchserve
+torch-model-archiver
+
+# ── HTTP client (gRPC server → TorchServe loopback) ──────────────────────────
+httpx==0.27.0
+
+# ── Config ────────────────────────────────────────────────────────────────────
+pydantic==2.6.4
+pydantic-settings==2.2.1
+
+# ── GCS ───────────────────────────────────────────────────────────────────────
+google-cloud-storage==2.16.0
+
+# ── Numerics (inherited from SDK, pinned for reproducibility) ─────────────────
+numpy==1.26.4

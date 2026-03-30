@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emotion-cloud
+  namespace: default
+  labels:
+    app: emotion-cloud
+    version: "1"
+spec:
+  # Start with 1 replica.  HPA will scale out under load.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: emotion-cloud
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # never drop to zero inference capacity during deploy
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: emotion-cloud
+    spec:
+      # ── Node selection: T4 GPU node pool ────────────────────────────────────
+      # GKE Autopilot provisions a T4 node automatically when it sees
+      # the nvidia.com/gpu resource request below.
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-tesla-t4
+
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+      # ── Service account ─────────────────────────────────────────────────────
+      # Needs roles/storage.objectViewer on the weights bucket.
+      # Bind via Workload Identity: https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+      serviceAccountName: emotion-cloud-sa
+
+      # ── Init container: pre-pull weights before the main app starts ─────────
+      # This keeps the main container's startup simple and separates concerns.
+      initContainers:
+        - name: download-weights
+          image: gcr.io/PROJECT_ID/emotion-cloud:latest
+          command:
+            - python
+            - scripts/download_weights.py
+          env:
+            - name: WEIGHTS_GCS_URI
+              valueFrom:
+                secretKeyRef:
+                  name: emotion-cloud-secrets
+                  key: WEIGHTS_GCS_URI
+            - name: WEIGHTS_LOCAL_PATH
+              value: /opt/ml/model-store/weights
+          volumeMounts:
+            - name: model-store
+              mountPath: /opt/ml/model-store
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+
+      # ── Main container ───────────────────────────────────────────────────────
+      containers:
+        - name: emotion-cloud
+          image: gcr.io/PROJECT_ID/emotion-cloud:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 50051
+              name: grpc
+              protocol: TCP
+
+          # GPU resource: 1 T4 per pod.
+          resources:
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "4"
+              memory: "12Gi"
+
+          # Load all config from a Kubernetes Secret.
+          # Create with: kubectl create secret generic emotion-cloud-secrets --from-env-file=.env
+          envFrom:
+            - secretRef:
+                name: emotion-cloud-secrets
+
+          # Weights volume (populated by the init container).
+          volumeMounts:
+            - name: model-store
+              mountPath: /opt/ml/model-store
+
+          # ── Probes ─────────────────────────────────────────────────────────
+          # Startup probe: generous timeout while TorchServe loads the model.
+          startupProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import grpc, emotion_pb2, emotion_pb2_grpc
+                  ch = grpc.insecure_channel('localhost:50051')
+                  stub = emotion_pb2_grpc.EmotionDetectionStub(ch)
+                  stub.HealthCheck(emotion_pb2.HealthRequest(), timeout=3)
+            failureThreshold: 30
+            periodSeconds: 10   # up to 300 s total (30 × 10)
+
+          # Liveness probe: restart pod if gRPC server hangs.
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import grpc, emotion_pb2, emotion_pb2_grpc
+                  ch = grpc.insecure_channel('localhost:50051')
+                  stub = emotion_pb2_grpc.EmotionDetectionStub(ch)
+                  r = stub.HealthCheck(emotion_pb2.HealthRequest(), timeout=3)
+                  assert r.healthy, f"not healthy: {r.model_status}"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+          # Readiness probe: only route traffic when the model is loaded.
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import grpc, emotion_pb2, emotion_pb2_grpc
+                  ch = grpc.insecure_channel('localhost:50051')
+                  stub = emotion_pb2_grpc.EmotionDetectionStub(ch)
+                  r = stub.HealthCheck(emotion_pb2.HealthRequest(), timeout=3)
+                  assert r.healthy and r.model_status == 'ready'
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 2
+
+      volumes:
+        # Shared ephemeral volume between init container and main container.
+        # On GKE Autopilot this is backed by local SSD on the GPU node.
+        - name: model-store
+          emptyDir: {}
+
+      # Terminate cleanly — give TorchServe time to drain.
+      terminationGracePeriodSeconds: 60
