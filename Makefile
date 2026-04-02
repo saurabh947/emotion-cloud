@@ -11,11 +11,15 @@ NAMESPACE   := default
 
 .PHONY: help proto build push deploy logs port-forward \
         download-weights package-model create-cluster delete-cluster \
-        k8s-apply k8s-delete k8s-status secrets docker-run
+        k8s-apply k8s-delete k8s-status secrets docker-run on off
 
 help:
 	@echo ""
 	@echo "  emotion-cloud Makefile"
+	@echo ""
+	@echo "  On/off (cost control)"
+	@echo "    make on               Scale to 1 replica — allow ~5 min for model load"
+	@echo "    make off              Scale to 0 replicas — stops GPU billing"
 	@echo ""
 	@echo "  Local dev"
 	@echo "    make proto              Regenerate gRPC stubs from proto/emotion.proto"
@@ -41,7 +45,7 @@ help:
 # ── gRPC stubs ────────────────────────────────────────────────────────────────
 
 proto:
-	python -m grpc_tools.protoc \
+	python3 -m grpc_tools.protoc \
 		-I proto \
 		--python_out=. \
 		--grpc_python_out=. \
@@ -54,7 +58,7 @@ docker-run:
 	docker compose -f deploy/docker/docker-compose.yml up --build
 
 download-weights:
-	python scripts/download_weights.py
+	python3 scripts/download_weights.py
 
 package-model:
 	bash scripts/package_model.sh
@@ -63,11 +67,13 @@ package-model:
 
 build:
 	docker build \
+		--platform linux/amd64 \
 		-f deploy/docker/Dockerfile \
 		-t $(IMAGE):$(TAG) \
 		.
 
 push: build
+	gcloud auth configure-docker --project=$(PROJECT_ID) --quiet
 	docker push $(IMAGE):$(TAG)
 
 # ── GKE cluster ───────────────────────────────────────────────────────────────
@@ -121,6 +127,16 @@ port-forward:
 
 logs:
 	kubectl logs -l app=emotion-cloud -f --tail=100
+
+# ── On / Off ─────────────────────────────────────────────────────────────────
+
+on:
+	kubectl scale deployment emotion-cloud --replicas=1
+	@echo "Scaling up. Run 'make k8s-status' to watch the pod come up (~5 min)."
+
+off:
+	kubectl scale deployment emotion-cloud --replicas=0
+	@echo "Scaled to 0. GPU billing stopped."
 
 # ── Full deploy ───────────────────────────────────────────────────────────────
 

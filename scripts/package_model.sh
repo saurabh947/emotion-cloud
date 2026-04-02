@@ -21,7 +21,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODEL_STORE="${MODEL_STORE:-/opt/ml/model-store}"
+MODEL_STORE="${MODEL_STORE:-${REPO_ROOT}/model-store}"
 MODEL_NAME="${MODEL_NAME:-emotion-detector}"
 MODEL_VERSION="${1:-1}"
 

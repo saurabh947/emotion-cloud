@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # emotion-cloud — production image
 #
-# Base: pytorch/torchserve:latest-gpu
-#   Includes: TorchServe, torch, torchvision, torchaudio, CUDA 12.1, Python 3.11
+# Base: pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+#   Python 3.11, PyTorch 2.3, CUDA 12.1 — TorchServe installed via pip
 #
 # Build:
 #   docker build -f deploy/docker/Dockerfile -t emotion-cloud:latest .
@@ -11,18 +11,18 @@
 #   docker run --gpus all --env-file .env -p 50051:50051 emotion-cloud:latest
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM pytorch/torchserve:latest-gpu
-
-USER root
+FROM --platform=linux/amd64 pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 
 # ── System dependencies ────────────────────────────────────────────────────────
 # ffmpeg + libsndfile1: required by emotion2vec audio tower
+# git: needed to pip-install SDK from GitHub
 # google-cloud-cli: gsutil for GCS weight download
-# curl: health-check in docker-compose
+# curl: used in google-cloud-cli apt setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         libsndfile1 \
         curl \
+        git \
         apt-transport-https \
         ca-certificates \
         gnupg \
@@ -49,7 +49,7 @@ COPY . .
 
 # ── Generate gRPC stubs from proto ─────────────────────────────────────────────
 # Outputs: emotion_pb2.py + emotion_pb2_grpc.py in the project root.
-RUN python -m grpc_tools.protoc \
+RUN python3 -m grpc_tools.protoc \
         -I proto \
         --python_out=. \
         --grpc_python_out=. \
@@ -68,4 +68,4 @@ COPY deploy/docker/config.properties /opt/ml/config/config.properties
 EXPOSE 50051
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
-CMD ["python", "main.py"]
+CMD ["python3", "main.py"]

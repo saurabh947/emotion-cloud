@@ -10,6 +10,7 @@ emotion_pb2_grpc.py
 
 # TorchServe artifacts
 *.mar
+model-store/
 /opt/
 
 # Python

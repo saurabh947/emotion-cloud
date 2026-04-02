@@ -7,8 +7,10 @@ metadata:
     app: emotion-cloud
     version: "1"
 spec:
-  # Start with 1 replica.  HPA will scale out under load.
-  replicas: 1
+  # Default 0 — scale up manually before a session, back to 0 after.
+  # make on   → replicas=1   (allow ~5 min for model load)
+  # make off  → replicas=0   (stops billing for GPU)
+  replicas: 0
   selector:
     matchLabels:
       app: emotion-cloud

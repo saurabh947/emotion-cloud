@@ -1,0 +1,23 @@
+# Development and testing dependencies
+# Install with: pip3 install -r requirements-dev.txt
+#
+# Does NOT include torch/torchserve — those are mocked in unit tests so CI
+# runs without a GPU or the heavy PyTorch install.
+
+# ── Test runner ───────────────────────────────────────────────────────────────
+pytest>=8.0
+pytest-asyncio>=0.23
+
+# ── gRPC (stub generation + integration tests) ────────────────────────────────
+grpcio==1.62.1
+grpcio-tools==1.62.1
+
+# ── HTTP (used by EmotionServicer, tested via AsyncMock) ─────────────────────
+httpx==0.27.0
+
+# ── Config (Pydantic Settings used by all layers) ────────────────────────────
+pydantic==2.6.4
+pydantic-settings==2.2.1
+
+# ── Numerics (used by handler preprocess / postprocess) ──────────────────────
+numpy==1.26.4
