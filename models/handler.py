@@ -61,7 +61,15 @@ class EmotionHandler(BaseHandler):
     def initialize(self, context) -> None:
         """Called once by TorchServe when the model worker starts."""
         properties = context.system_properties
-        model_dir = properties.get("model_dir", "/opt/ml/model-store/weights")
+
+        # TorchServe sets model_dir to the .mar extraction temp directory, not
+        # the weights directory.  Allow an explicit override via WEIGHTS_LOCAL_PATH
+        # (set in the container env) so the handler can find the checkpoint.
+        weights_local_path = os.environ.get("WEIGHTS_LOCAL_PATH")
+        if weights_local_path:
+            model_dir = weights_local_path
+        else:
+            model_dir = properties.get("model_dir", "/opt/ml/model-store/weights")
 
         # Resolve compute device.
         if torch.cuda.is_available():

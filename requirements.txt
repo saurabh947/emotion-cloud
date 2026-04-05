@@ -23,5 +23,12 @@ pydantic-settings==2.2.1
 # ── GCS ───────────────────────────────────────────────────────────────────────
 google-cloud-storage==2.16.0
 
+# ── PyTorch (pinned to match base image pytorch/pytorch:2.3.0-cuda12.1) ───────
+# The SDK declares torch>=2.0.0 which the force-reinstall would upgrade to
+# a newer incompatible version, breaking the torchaudio ABI. Pin here to hold.
+torch==2.3.0
+torchaudio==2.3.0
+torchvision==0.18.0
+
 # ── Numerics (inherited from SDK, pinned for reproducibility) ─────────────────
 numpy==1.26.4

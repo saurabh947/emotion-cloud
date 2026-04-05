@@ -34,8 +34,13 @@ def download_weights(settings: Settings) -> None:
     """
     Download model weights and .mar archive from GCS to local disk.
 
-    Weights: gsutil -m cp -r (parallel multi-threaded).
+    Weights: gsutil rsync (mirrors contents of GCS prefix into local dir).
     .mar:    gsutil cp (single small file, ~5 KB).
+
+    Uses rsync instead of cp -r to avoid the nested-directory bug where
+    ``gsutil cp -r gs://…/v1/ /local/dir`` creates ``/local/dir/v1/``
+    when the destination already exists.  rsync mirrors the *contents*
+    of the source prefix directly into the destination directory.
 
     Skips weights if the local directory already contains files (warm restart).
     Always overwrites the .mar so a redeployed archive is picked up on restart.
@@ -49,18 +54,19 @@ def download_weights(settings: Settings) -> None:
     dest = Path(settings.weights_local_path)
     dest.mkdir(parents=True, exist_ok=True)
 
-    existing = list(dest.iterdir())
-    if existing:
+    # Only check for actual files (not subdirectories) to detect a valid cache.
+    existing_files = [f for f in dest.iterdir() if f.is_file()]
+    if existing_files:
         logger.info(
             "Weights already present at %s (%d files) — skipping download",
             dest,
-            len(existing),
+            len(existing_files),
         )
     else:
         logger.info("Downloading weights: %s → %s", settings.weights_gcs_uri, dest)
         t0 = time.monotonic()
         result = subprocess.run(
-            ["gsutil", "-m", "cp", "-r", settings.weights_gcs_uri, str(dest)],
+            ["gsutil", "-m", "rsync", "-r", settings.weights_gcs_uri, str(dest)],
             capture_output=True,
             text=True,
         )
@@ -68,7 +74,16 @@ def download_weights(settings: Settings) -> None:
             raise RuntimeError(
                 f"gsutil download failed (exit {result.returncode}):\n{result.stderr}"
             )
-        logger.info("Weights downloaded in %.1f s → %s", time.monotonic() - t0, dest)
+        elapsed = time.monotonic() - t0
+
+        # Verify the expected checkpoint actually landed.
+        checkpoint = dest / settings.weights_file_name
+        if not checkpoint.is_file():
+            raise FileNotFoundError(
+                f"Download completed but checkpoint not found at {checkpoint}. "
+                f"Check WEIGHTS_GCS_URI and WEIGHTS_LOCAL_PATH."
+            )
+        logger.info("Weights downloaded in %.1f s → %s", elapsed, dest)
 
     # ── .mar archive ───────────────────────────────────────────────────────────
     mar_dest = Path(settings.model_store_path) / f"{settings.model_name}.mar"

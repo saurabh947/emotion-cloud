@@ -46,7 +46,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 # Force-reinstall the SDK from GitHub to pick up the latest commit.
 # Run in a separate layer so stable deps above stay cached.
-RUN pip install --no-cache-dir --force-reinstall \
+RUN pip install --no-cache-dir --force-reinstall --no-deps \
     "emotion-detection-action @ git+https://github.com/saurabh947/emotion-detection-action.git"
 
 # ── Application source ─────────────────────────────────────────────────────────
