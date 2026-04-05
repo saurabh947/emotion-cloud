@@ -1,18 +1,21 @@
 # emotion-cloud
 
 Cloud inference service for the [emotion-detection-action](https://github.com/saurabh947/emotion-detection-action) SDK.
-Serves the Two-Tower Multimodal Transformer (ViT video + emotion2vec audio) as a REST/WebSocket API.
+Serves the Two-Tower Multimodal Transformer (ViT video + emotion2vec audio) as a gRPC streaming API on Google Cloud.
+
+Deployed as a Docker container on a Compute Engine VM (`n1-standard-4` + NVIDIA T4, `us-east1-c`).
+Managed via `make vm-*` targets — no Kubernetes.
 
 ## Project layout
 
 ```
-api/          REST + WebSocket endpoints
-models/       Model loading, caching, and device management
+api/          gRPC server + schemas
+models/       TorchServe handler, GCS weight loader
 config/       Pydantic settings (env-driven)
 deploy/
-  docker/     Dockerfile + docker-compose
-  k8s/        Kubernetes manifests
-scripts/      Utility scripts (weight download, benchmarks, etc.)
+  docker/     Dockerfile + docker-compose (local dev)
+  vm/         GCE VM startup script
+scripts/      Weight download, model packaging
 main.py       App entrypoint
 ```
 

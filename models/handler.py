@@ -88,12 +88,12 @@ class EmotionHandler(BaseHandler):
         if not os.path.isfile(checkpoint_path):
             raise FileNotFoundError(
                 f"Checkpoint not found: {checkpoint_path}. "
-                f"Check WEIGHTS_FILE_NAME and that the init container ran successfully."
+                f"Check WEIGHTS_FILE_NAME and that weights were downloaded from GCS."
             )
 
         # Cache dir for HuggingFace + FunASR backbone downloads.
-        # Stored inside model_dir so it survives on the same pod across
-        # process restarts (though not pod reschedules on emptyDir).
+        # Stored inside model_dir so it survives across TorchServe
+        # process restarts within the same container.
         cache_dir = os.path.join(model_dir, ".backbone_cache")
         os.makedirs(cache_dir, exist_ok=True)
 

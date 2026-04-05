@@ -7,7 +7,7 @@ Boot sequence:
   3. Wait for TorchServe to report healthy on /ping.
   4. Start the gRPC server and serve until interrupted.
 
-If any step fails the process exits non-zero so Kubernetes restarts the pod.
+If any step fails the process exits non-zero so Docker restarts the container.
 """
 
 from __future__ import annotations

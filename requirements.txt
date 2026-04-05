@@ -11,6 +11,7 @@ protobuf==4.25.3
 # Base image is pytorch/pytorch (not pytorch/torchserve), so install explicitly.
 torchserve==0.12.0
 torch-model-archiver==0.12.0
+nvgpu==0.10.0                   # TorchServe GPU metrics collector dependency
 
 # ── HTTP client (gRPC server → TorchServe loopback) ──────────────────────────
 httpx==0.27.0

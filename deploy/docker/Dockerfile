@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         apt-transport-https \
         ca-certificates \
         gnupg \
+        openjdk-17-jdk-headless \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] \
         https://packages.cloud.google.com/apt cloud-sdk main" \
         | tee /etc/apt/sources.list.d/google-cloud-sdk.list \
@@ -43,6 +44,10 @@ WORKDIR /opt/emotion-cloud
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
+# Force-reinstall the SDK from GitHub to pick up the latest commit.
+# Run in a separate layer so stable deps above stay cached.
+RUN pip install --no-cache-dir --force-reinstall \
+    "emotion-detection-action @ git+https://github.com/saurabh947/emotion-detection-action.git"
 
 # ── Application source ─────────────────────────────────────────────────────────
 COPY . .
@@ -60,6 +65,7 @@ RUN mkdir -p /opt/ml/model-store /opt/ml/config
 
 # Copy TorchServe config.
 COPY deploy/docker/config.properties /opt/ml/config/config.properties
+
 
 # ── Ports ──────────────────────────────────────────────────────────────────────
 # 50051 → gRPC (exposed to the robot / external clients)

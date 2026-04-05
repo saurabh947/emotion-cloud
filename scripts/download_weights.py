@@ -3,7 +3,7 @@
 Standalone weight download script.
 
 Used by:
-  - The Kubernetes init container (before TorchServe starts).
+  - The Docker container entrypoint (main.py calls this before TorchServe starts).
   - `make download-weights` during local development.
 
 Reads WEIGHTS_GCS_URI and WEIGHTS_LOCAL_PATH from environment (or .env).

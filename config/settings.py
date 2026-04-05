@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """
     All configuration is read from environment variables (or .env).
-    Deployed via Kubernetes Secret → envFrom in the pod spec.
+    Deployed via /etc/emotion-cloud.env on the GCE VM (Docker --env-file).
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Compute device passed to the emotion-detection-action Config (two_tower_device).
     device: str = "cuda"
     # Enable INT8 dynamic quantization via detector.quantize("dynamic").
-    # Halves VRAM usage on T4, ~15% latency reduction.
+    # Halves VRAM usage, ~15% latency reduction.
     use_int8: bool = True
     # Filename of the fine-tuned checkpoint inside weights_local_path.
     # Full path = weights_local_path / weights_file_name.
@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     weights_gcs_uri: str = "gs://emotion-cloud-models/weights/v1/"
     # Local directory where weights land after download.
     weights_local_path: str = "/opt/ml/model-store/weights"
+    # TorchServe model archive in GCS — downloaded to model_store_path at startup.
+    mar_gcs_uri: str = "gs://emotion-cloud-models/model-store/emotion-detector.mar"
 
     # ── Startup ────────────────────────────────────────────────────────────────
     # How long (seconds) to wait for TorchServe to become healthy after launch.

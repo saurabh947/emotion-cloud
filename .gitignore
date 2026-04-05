@@ -33,3 +33,4 @@ weights/
 
 # macOS
 .DS_Store
+.gstack/

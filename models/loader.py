@@ -1,15 +1,15 @@
 """
 Model loader: two responsibilities.
 
-1. download_weights()   — pull model weights from GCS to local disk on pod
-                          startup (before TorchServe reads them).
+1. download_weights()   — pull model weights from GCS to local disk on
+                          container startup (before TorchServe reads them).
 
 2. start_torchserve()   — launch the TorchServe process and wait until it
                           reports healthy on /ping.
 
 Called once in sequence by main.py before the gRPC server starts accepting
-connections.  Both functions raise on failure so the pod crashes fast and
-Kubernetes restarts it — preferable to serving with a broken model.
+connections.  Both functions raise on failure so the container exits and Docker
+restarts it — preferable to serving with a broken model.
 """
 
 from __future__ import annotations
@@ -32,16 +32,23 @@ logger = logging.getLogger(__name__)
 
 def download_weights(settings: Settings) -> None:
     """
-    Sync model weights from GCS to local disk using gsutil.
+    Download model weights and .mar archive from GCS to local disk.
 
-    Uses gsutil -m cp -r for parallel multi-threaded download.
-    Skips if the local weights directory already contains files (e.g. warm
-    restart after a pod reschedule onto a node with a warm local SSD).
+    Weights: gsutil -m cp -r (parallel multi-threaded).
+    .mar:    gsutil cp (single small file, ~5 KB).
+
+    Skips weights if the local directory already contains files (warm restart).
+    Always overwrites the .mar so a redeployed archive is picked up on restart.
     """
+    if not shutil.which("gsutil"):
+        raise EnvironmentError(
+            "gsutil not found. The Docker image must include google-cloud-cli."
+        )
+
+    # ── weights ────────────────────────────────────────────────────────────────
     dest = Path(settings.weights_local_path)
     dest.mkdir(parents=True, exist_ok=True)
 
-    # Skip download if weights already present (e.g. node local cache).
     existing = list(dest.iterdir())
     if existing:
         logger.info(
@@ -49,29 +56,35 @@ def download_weights(settings: Settings) -> None:
             dest,
             len(existing),
         )
-        return
-
-    if not shutil.which("gsutil"):
-        raise EnvironmentError(
-            "gsutil not found. The Docker image must include google-cloud-cli."
+    else:
+        logger.info("Downloading weights: %s → %s", settings.weights_gcs_uri, dest)
+        t0 = time.monotonic()
+        result = subprocess.run(
+            ["gsutil", "-m", "cp", "-r", settings.weights_gcs_uri, str(dest)],
+            capture_output=True,
+            text=True,
         )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gsutil download failed (exit {result.returncode}):\n{result.stderr}"
+            )
+        logger.info("Weights downloaded in %.1f s → %s", time.monotonic() - t0, dest)
 
-    logger.info("Downloading weights: %s → %s", settings.weights_gcs_uri, dest)
-    t0 = time.monotonic()
+    # ── .mar archive ───────────────────────────────────────────────────────────
+    mar_dest = Path(settings.model_store_path) / f"{settings.model_name}.mar"
+    mar_dest.parent.mkdir(parents=True, exist_ok=True)
 
+    logger.info("Downloading .mar: %s → %s", settings.mar_gcs_uri, mar_dest)
     result = subprocess.run(
-        ["gsutil", "-m", "cp", "-r", settings.weights_gcs_uri, str(dest)],
+        ["gsutil", "cp", settings.mar_gcs_uri, str(mar_dest)],
         capture_output=True,
         text=True,
     )
-
     if result.returncode != 0:
         raise RuntimeError(
-            f"gsutil download failed (exit {result.returncode}):\n{result.stderr}"
+            f"gsutil .mar download failed (exit {result.returncode}):\n{result.stderr}"
         )
-
-    elapsed = time.monotonic() - t0
-    logger.info("Weights downloaded in %.1f s → %s", elapsed, dest)
+    logger.info(".mar downloaded → %s", mar_dest)
 
 
 # ── TorchServe startup ────────────────────────────────────────────────────────
